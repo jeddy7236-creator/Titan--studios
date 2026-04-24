@@ -1,0 +1,461 @@
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+const sqlite3 = require('sqlite3').verbose();
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('ffmpeg-static');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+app.use(cors());
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+app.use(express.static('public'));
+app.use('/uploads', express.static('uploads'));
+
+const dirs = ['uploads', 'public', 'public/videos', 'public/audio', 'public/images'];
+dirs.forEach(dir => { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); });
+
+const db = new sqlite3.Database('./titan.db');
+
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, username TEXT UNIQUE, email TEXT UNIQUE, 
+        password TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS videos (
+        id TEXT PRIMARY KEY, user_id TEXT, title TEXT, url TEXT, 
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS scripts (
+        id TEXT PRIMARY KEY, user_id TEXT, topic TEXT, content TEXT, 
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+});
+
+const auth = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        const decoded = jwt.verify(token, 'titan_super_secret_key');
+        req.user = decoded;
+        next();
+    } catch(e) { res.status(401).json({ error: 'Invalid token' }); }
+};
+
+app.post('/api/auth/signup', async (req, res) => {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) return res.status(400).json({ error: 'All fields required' });
+    try {
+        const hashed = await bcrypt.hash(password, 10);
+        const userId = uuidv4();
+        db.run('INSERT INTO users (id, username, email, password) VALUES (?,?,?,?)',
+            [userId, username, email, hashed], (err) => {
+            if (err) return res.status(400).json({ error: 'User exists' });
+            const token = jwt.sign({ id: userId, username }, 'titan_super_secret_key', { expiresIn: '365d' });
+            res.json({ token, user: { id: userId, username, email } });
+        });
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/auth/login', (req, res) => {
+    const { email, password } = req.body;
+    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
+        if (err || !user) return res.status(401).json({ error: 'Invalid credentials' });
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+        const token = jwt.sign({ id: user.id, username: user.username }, 'titan_super_secret_key', { expiresIn: '365d' });
+        res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+    });
+});
+
+const upload = multer({ dest: 'uploads/' });
+
+app.post('/api/video/image-to-video', auth, upload.single('image'), async (req, res) => {
+    const imageFile = req.file;
+    const { duration, text } = req.body;
+    if (!imageFile) return res.status(400).json({ error: 'Image required' });
+    
+    const outputName = `${uuidv4()}.mp4`;
+    const outputPath = path.join(__dirname, 'public/videos', outputName);
+    const durations = parseInt(duration) || 5;
+    
+    try {
+        await new Promise((resolve, reject) => {
+            let command = ffmpeg()
+                .input(imageFile.path)
+                .loop(durations)
+                .inputOptions('-stream_loop -1')
+                .outputOptions([`-t ${durations}`, '-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2'])
+                .videoCodec('libx264')
+                .output(outputPath);
+            
+            if (text) {
+                command = command.outputOptions([`-vf drawtext=text='${text.replace(/'/g, "\\'")}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-100`]);
+            }
+            command.on('end', resolve).on('error', reject).run();
+        });
+        
+        fs.unlinkSync(imageFile.path);
+        const videoId = uuidv4();
+        db.run('INSERT INTO videos (id, user_id, title, url) VALUES (?,?,?,?)',
+            [videoId, req.user.id, `Titan Video`, `/videos/${outputName}`]);
+        
+        res.json({ success: true, videoUrl: `/videos/${outputName}`, videoId });
+    } catch(error) {
+        res.status(500).json({ error: 'Failed to create video' });
+    }
+});
+
+app.post('/api/video/slideshow', auth, upload.array('images', 50), async (req, res) => {
+    const images = req.files;
+    const { durationPerImage } = req.body;
+    if (!images || images.length === 0) return res.status(400).json({ error: 'Images required' });
+    
+    const outputName = `${uuidv4()}.mp4`;
+    const outputPath = path.join(__dirname, 'public/videos', outputName);
+    const duration = parseInt(durationPerImage) || 3;
+    
+    try {
+        await new Promise((resolve, reject) => {
+            const command = ffmpeg();
+            images.forEach(img => command.input(img.path));
+            command.inputOptions([`-framerate 1/${duration}`])
+                .outputOptions(['-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2', '-c:v libx264'])
+                .output(outputPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        
+        images.forEach(img => fs.unlinkSync(img.path));
+        res.json({ success: true, videoUrl: `/videos/${outputName}` });
+    } catch(error) {
+        res.status(500).json({ error: 'Slideshow failed' });
+    }
+});
+
+app.post('/api/video/merge', auth, upload.array('videos', 10), async (req, res) => {
+    const videos = req.files;
+    if (!videos || videos.length < 2) return res.status(400).json({ error: 'At least 2 videos required' });
+    
+    const outputName = `${uuidv4()}.mp4`;
+    const outputPath = path.join(__dirname, 'public/videos', outputName);
+    
+    try {
+        const concatFile = path.join(__dirname, 'uploads', `merge_${uuidv4()}.txt`);
+        const concatContent = videos.map(v => `file '${path.resolve(v.path)}'`).join('\n');
+        fs.writeFileSync(concatFile, concatContent);
+        
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(concatFile)
+                .inputOptions(['-f concat', '-safe 0'])
+                .videoCodec('libx264')
+                .audioCodec('aac')
+                .output(outputPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        
+        videos.forEach(v => fs.unlinkSync(v.path));
+        fs.unlinkSync(concatFile);
+        res.json({ success: true, videoUrl: `/videos/${outputName}` });
+    } catch(error) {
+        res.status(500).json({ error: 'Merge failed' });
+    }
+});
+
+app.post('/api/video/resize', auth, upload.single('video'), async (req, res) => {
+    const videoFile = req.file;
+    const { platform } = req.body;
+    if (!videoFile) return res.status(400).json({ error: 'Video required' });
+    
+    let dimensions = '1080:1920';
+    if (platform === 'youtube') dimensions = '1920:1080';
+    if (platform === 'instagram') dimensions = '1080:1080';
+    if (platform === 'facebook') dimensions = '1280:720';
+    
+    const outputName = `${uuidv4()}.mp4`;
+    const outputPath = path.join(__dirname, 'public/videos', outputName);
+    
+    try {
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoFile.path)
+                .outputOptions([`-vf scale=${dimensions}:force_original_aspect_ratio=decrease,pad=${dimensions}:(ow-iw)/2:(oh-ih)/2`])
+                .videoCodec('libx264')
+                .audioCodec('aac')
+                .output(outputPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        
+        fs.unlinkSync(videoFile.path);
+        res.json({ success: true, videoUrl: `/videos/${outputName}` });
+    } catch(error) {
+        res.status(500).json({ error: 'Resize failed' });
+    }
+});
+
+app.post('/api/audio/extract', auth, upload.single('video'), async (req, res) => {
+    const videoFile = req.file;
+    if (!videoFile) return res.status(400).json({ error: 'Video required' });
+    
+    const outputName = `${uuidv4()}.mp3`;
+    const outputPath = path.join(__dirname, 'public/audio', outputName);
+    
+    try {
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoFile.path)
+                .audioCodec('libmp3lame')
+                .output(outputPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        
+        fs.unlinkSync(videoFile.path);
+        res.json({ success: true, audioUrl: `/audio/${outputName}` });
+    } catch(error) {
+        res.status(500).json({ error: 'Extraction failed' });
+    }
+});
+
+app.post('/api/video/add-music', auth, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
+    const videoFile = req.files['video']?.[0];
+    const musicFile = req.files['music']?.[0];
+    if (!videoFile || !musicFile) return res.status(400).json({ error: 'Video and music required' });
+    
+    const outputName = `${uuidv4()}.mp4`;
+    const outputPath = path.join(__dirname, 'public/videos', outputName);
+    
+    try {
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(videoFile.path)
+                .input(musicFile.path)
+                .outputOptions(['-c:v copy', '-c:a aac', '-map 0:v:0', '-map 1:a:0', '-shortest'])
+                .output(outputPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        
+        fs.unlinkSync(videoFile.path);
+        fs.unlinkSync(musicFile.path);
+        res.json({ success: true, videoUrl: `/videos/${outputName}` });
+    } catch(error) {
+        res.status(500).json({ error: 'Add music failed' });
+    }
+});
+
+app.post('/api/ai/generate-script', auth, async (req, res) => {
+    const { topic, platform, tone, duration } = req.body;
+    
+    const scripts = {
+        motivation: `🔥 ATTENTION: This will change your life 🔥
+
+Most people wake up, scroll their phone, and wonder why nothing changes.
+
+But YOU? You're different.
+
+Here's the truth: Success isn't about talent. It's about TAKING ACTION.
+
+Today, do ONE thing your future self will thank you for.
+
+Stop waiting. Start DOING.
+
+Save this video. Watch it daily.
+
+Comment "LET'S GO" if you're ready! 🦾
+
+#motivation #success #titan`,
+        
+        educational: `📚 The TRUTH about ${topic} 📚
+
+Here's something that will blow your mind:
+
+Most people think it's complicated, but actually...
+
+The real secret is simple.
+
+Here's how to use this TODAY:
+
+Step 1: Take action
+Step 2: Stay consistent
+Step 3: Get results
+
+Save this for later!
+
+#${topic.replace(/ /g, '')} #education`,
+        
+        business: `💼 How to make money with ${topic} 💼
+
+Here's the REAL strategy that works:
+
+1. Find a problem people need solved
+2. Create content about it daily
+3. Offer a solution
+
+That's it. No secrets. Just consistency.
+
+Most people won't do this for 90 days.
+
+But you will.
+
+Save this. Do it. Thank me later.
+
+#business #money #${topic.replace(/ /g, '')}`,
+        
+        funny: `😂 POV: You try ${topic} for the first time 😂
+
+Me: "This will be easy"
+The ${topic}: "Hold my beer"
+
+Comment what happened to you below! 👇
+
+#funny #relatable`
+    };
+    
+    let script = scripts[tone] || scripts.motivation;
+    script = script.replace(/\[topic\]/g, topic);
+    
+    const hooks = [
+        `🎯 "Stop scrolling - this will change your ${topic} game"`,
+        `🔥 "99% of people get ${topic} wrong"`,
+        `💎 "The secret to ${topic} that works"`,
+        `⚡ "Do this for 30 days and watch"`,
+        `🦾 "Only TITANS know this about ${topic}"`
+    ];
+    
+    const scriptId = uuidv4();
+    db.run('INSERT INTO scripts (id, user_id, topic, content) VALUES (?,?,?,?)',
+        [scriptId, req.user.id, topic, script]);
+    
+    res.json({ success: true, script, hooks });
+});
+
+app.post('/api/video/bulk-create', auth, upload.array('images', 100), async (req, res) => {
+    const images = req.files;
+    const { duration } = req.body;
+    if (!images || images.length === 0) return res.status(400).json({ error: 'Images required' });
+    
+    const results = [];
+    const durations = parseInt(duration) || 5;
+    
+    for (let i = 0; i < Math.min(images.length, 100); i++) {
+        const image = images[i];
+        const outputName = `${uuidv4()}.mp4`;
+        const outputPath = path.join(__dirname, 'public/videos', outputName);
+        
+        try {
+            await new Promise((resolve, reject) => {
+                ffmpeg()
+                    .input(image.path)
+                    .loop(durations)
+                    .inputOptions('-stream_loop -1')
+                    .outputOptions([`-t ${durations}`, '-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2'])
+                    .videoCodec('libx264')
+                    .output(outputPath)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            });
+            
+            results.push({ videoUrl: `/videos/${outputName}`, originalImage: image.originalname });
+            fs.unlinkSync(image.path);
+        } catch(e) {
+            results.push({ error: `Failed for ${image.originalname}` });
+        }
+    }
+    
+    res.json({ success: true, videos: results, total: results.length });
+});
+
+app.post('/api/video/to-gif', auth, upload.single('video'), async (req, res) => {
+    const videoFile = req.file;
+    if (!videoFile) return res.status(400).json({ error: 'Video required' });
+    
+    const outputName = `${uuidv4()}.gif`;
+    const outputPath = path.join(__dirname, 'public', outputName);
+    
+    try {
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoFile.path)
+                .outputOptions(['-vf fps=10,scale=480:-1', '-t 5'])
+                .output(outputPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        
+        fs.unlinkSync(videoFile.path);
+        res.json({ success: true, gifUrl: `/${outputName}` });
+    } catch(error) {
+        res.status(500).json({ error: 'GIF conversion failed' });
+    }
+});
+
+app.post('/api/video/text-to-video', auth, async (req, res) => {
+    const { text, duration } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text required' });
+    
+    const outputName = `${uuidv4()}.mp4`;
+    const outputPath = path.join(__dirname, 'public/videos', outputName);
+    const durations = parseInt(duration) || 10;
+    
+    try {
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(`color=c=black:s=1080x1920:d=${durations}`)
+                .outputOptions([`-vf drawtext=text='${text.replace(/'/g, "\\'")}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2:enable=lt(t,${durations})`])
+                .videoCodec('libx264')
+                .output(outputPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        
+        res.json({ success: true, videoUrl: `/videos/${outputName}` });
+    } catch(error) {
+        res.status(500).json({ error: 'Text to video failed' });
+    }
+});
+
+app.get('/api/user/videos', auth, (req, res) => {
+    db.all('SELECT * FROM videos WHERE user_id = ? ORDER BY created_at DESC', [req.user.id], (err, videos) => {
+        res.json(videos || []);
+    });
+});
+
+app.get('/api/user/scripts', auth, (req, res) => {
+    db.all('SELECT * FROM scripts WHERE user_id = ? ORDER BY created_at DESC', [req.user.id], (err, scripts) => {
+        res.json(scripts || []);
+    });
+});
+
+app.get('/api/user/profile', auth, (req, res) => {
+    db.get('SELECT id, username, email FROM users WHERE id = ?', [req.user.id], (err, user) => {
+        res.json(user || {});
+    });
+});
+
+app.use(express.static('public'));
+
+app.listen(PORT, () => {
+    console.log('\n' + '='.repeat(60));
+    console.log('🦾 TITAN STUDIOS IS LIVE 🦾');
+    console.log('='.repeat(60));
+    console.log(`📍 http://localhost:${PORT}`);
+    console.log('='.repeat(60) + '\n');
+});
