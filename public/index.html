@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>TITAN STUDIOS - Ultimate Content Creation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #0a0a0a 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        /* Navbar */
+        .navbar {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+            z-index: 1000;
+            padding: 1rem 1.5rem;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo i {
+            font-size: 1.8rem;
+            color: #7c3aed;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 0.8rem;
+            align-items: center;
+        }
+
+        .btn-nav {
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+        }
+
+        .btn-login {
+            background: transparent;
+            border: 1px solid #7c3aed;
+            color: white;
+        }
+
+        .btn-signup {
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            color: white;
+        }
+
+        .btn-logout {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .user-name {
+            color: #7c3aed;
+            font-weight: 600;
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 6rem 1.5rem 4rem;
+        }
+
+        .hero h1 {
+            font-size: 2.8rem;
+            margin-bottom: 1rem;
+            line-height: 1.2;
+        }
+
+        .gradient {
+            background: linear-gradient(135deg, #7c3aed, #ec4899, #f59e0b);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: #9ca3af;
+            max-width: 600px;
+            margin: 0 auto 2rem;
+        }
+
+        .btn-hero {
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            padding: 1rem 2rem;
+            border-radius: 2rem;
+            border: none;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+        }
+
+        .stats {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-top: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #7c3aed;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            padding: 6rem 1.5rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .welcome-banner {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(236, 72, 153, 0.2));
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .tool-card {
+            background: rgba(124, 58, 237, 0.1);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 1rem;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tool-card:hover, .tool-card.active {
+            background: #7c3aed;
+            transform: translateY(-3px);
+        }
+
+        .tool-card i {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .tool-panel {
+            display: none;
+            background: rgba(26, 26, 46, 0.8);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .tool-panel.active {
+            display: block;
+        }
+
+        .upload-area {
+            border: 2px dashed #7c3aed;
+            border-radius: 1rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            background: rgba(124, 58, 237, 0.1);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 0.5rem;
+            color: white;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        button {
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .result-area {
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+
+        video, audio {
+            max-width: 100%;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .script-output {
+            background: #0a0a0a;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            white-space: pre-wrap;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: #1a1a2e;
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 400px;
+            width: 90%;
+            border: 1px solid #7c3aed;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-content input {
+            margin-bottom: 1rem;
+        }
+
+        .close {
+            float: right;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #9ca3af;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            bottom: 2rem;
+            right: 1rem;
+            left: 1rem;
+            background: #7c3aed;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            z-index: 1000;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            .tool-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .tool-card {
+                font-size: 0.7rem;
+                padding: 0.75rem;
+            }
+            .tool-card i {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+    <div class="nav-container">
+        <div class="logo">
+            <i class="fas fa-robot"></i>
+            <span>TITAN STUDIOS</span>
+        </div>
+        <div class="nav-buttons" id="navButtons">
+            <button class="btn-nav btn-login" id="loginNavBtn" onclick="openModal('login')">Sign In</button>
+            <button class="btn-nav btn-signup" id="signupNavBtn" onclick="openModal('signup')">Get Started</button>
+            <span id="userNameSpan" style="display:none;"></span>
+            <button class="btn-nav btn-logout" id="logoutBtn" style="display:none;" onclick="logout()">Exit</button>
+        </div>
+    </div>
+</nav>
+
+<!-- Home Section -->
+<div id="homeSection">
+    <div class="hero">
+        <div>
+            <h1>Create Content Like a <span class="gradient">TITAN</span></h1>
+            <p>Image to Video • AI Scripts • Voiceover • Video Editing • Bulk Creation • All in One Place. 100% Free.</p>
+            <button class="btn-hero" onclick="openModal('signup')">🚀 Start Creating Free</button>
+            <div class="stats">
+                <div class="stat-item"><div class="stat-number">15+</div><div>AI Tools</div></div>
+                <div class="stat-item"><div class="stat-number">10X</div><div>Faster</div></div>
+                <div class="stat-item"><div class="stat-number">100%</div><div>Free</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Section -->
+<div id="dashboardSection" style="display:none;">
+    <div class="dashboard">
+        <div class="welcome-banner">
+            <h2>🦾 Welcome, <span id="dashUsername"></span>!</h2>
+            <p>Your Titan Studio is ready. All tools unlocked. Create anything you want.</p>
+        </div>
+
+        <div class="tool-grid" id="toolGrid">
+            <div class="tool-card" data-tool="image-to-video"><i class="fas fa-image"></i>Image to Video</div>
+            <div class="tool-card" data-tool="slideshow"><i class="fas fa-images"></i>Slideshow</div>
+            <div class="tool-card" data-tool="merge"><i class="fas fa-compress"></i>Merge Videos</div>
+            <div class="tool-card" data-tool="resize"><i class="fas fa-expand"></i>Resize</div>
+            <div class="tool-card" data-tool="extract-audio"><i class="fas fa-music"></i>Extract Audio</div>
+            <div class="tool-card" data-tool="add-music"><i class="fas fa-headphones"></i>Add Music</div>
+            <div class="tool-card" data-tool="script-generator"><i class="fas fa-pen-fancy"></i>AI Scripts</div>
+            <div class="tool-card" data-tool="bulk-create"><i class="fas fa-layer-group"></i>Bulk Create</div>
+            <div class="tool-card" data-tool="to-gif"><i class="fas fa-file-image"></i>Video to GIF</div>
+            <div class="tool-card" data-tool="text-to-video"><i class="fas fa-font"></i>Text to Video</div>
+            <div class="tool-card" data-tool="my-videos"><i class="fas fa-video"></i>My Videos</div>
+            <div class="tool-card" data-tool="my-scripts"><i class="fas fa-book"></i>My Scripts</div>
+        </div>
+
+        <!-- Tool: Image to Video -->
+        <div id="tool-image-to-video" class="tool-panel">
+            <h3><i class="fas fa-image"></i> Image to Video</h3>
+            <div class="upload-area" id="imageUploadArea">
+                <i class="fas fa-cloud-upload-alt" style="font-size: 2rem;"></i>
+                <p>Tap to select image</p>
+                <small>JPG, PNG up to 50MB</small>
+                <input type="file" id="imageInput" accept="image/*" hidden>
+            </div>
+            <input type="number" id="videoDuration" placeholder="Duration (seconds)" value="5">
+            <input type="text" id="videoText" placeholder="Optional text overlay">
+            <button id="generateVideoBtn" onclick="createImageToVideo()">Generate Video</button>
+            <div id="imageVideoResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: Slideshow -->
+        <div id="tool-slideshow" class="tool-panel">
+            <h3><i class="fas fa-images"></i> Multiple Images to Slideshow</h3>
+            <div class="upload-area" id="slideshowUploadArea">
+                <i class="fas fa-plus-circle"></i>
+                <p>Select multiple images</p>
+                <input type="file" id="slideshowInput" accept="image/*" multiple hidden>
+            </div>
+            <input type="number" id="slideDuration" placeholder="Seconds per image" value="3">
+            <button onclick="createSlideshow()">Create Slideshow</button>
+            <div id="slideshowResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: Merge Videos -->
+        <div id="tool-merge" class="tool-panel">
+            <h3><i class="fas fa-compress"></i> Merge Videos</h3>
+            <div class="upload-area" id="mergeUploadArea">
+                <i class="fas fa-video"></i>
+                <p>Select 2+ videos to merge</p>
+                <input type="file" id="mergeInput" accept="video/*" multiple hidden>
+            </div>
+            <button onclick="mergeVideos()">Merge Videos</button>
+            <div id="mergeResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: Resize -->
+        <div id="tool-resize" class="tool-panel">
+            <h3><i class="fas fa-expand"></i> Resize Video</h3>
+            <div class="upload-area" id="resizeUploadArea">
+                <i class="fas fa-video"></i>
+                <p>Select video to resize</p>
+                <input type="file" id="resizeInput" accept="video/*" hidden>
+            </div>
+            <select id="resizePlatform">
+                <option value="tiktok">TikTok/Reels (9:16)</option>
+                <option value="youtube">YouTube (16:9)</option>
+                <option value="instagram">Instagram (1:1)</option>
+            </select>
+            <button onclick="resizeVideo()">Resize</button>
+            <div id="resizeResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: Extract Audio -->
+        <div id="tool-extract-audio" class="tool-panel">
+            <h3><i class="fas fa-music"></i> Extract Audio</h3>
+            <div class="upload-area" id="extractAudioUploadArea">
+                <i class="fas fa-video"></i>
+                <p>Select video to extract audio</p>
+                <input type="file" id="extractAudioInput" accept="video/*" hidden>
+            </div>
+            <button onclick="extractAudio()">Extract MP3</button>
+            <div id="extractAudioResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: Add Music -->
+        <div id="tool-add-music" class="tool-panel">
+            <h3><i class="fas fa-headphones"></i> Add Music to Video</h3>
+            <div class="upload-area" id="addMusicVideoArea">
+                <i class="fas fa-video"></i>
+                <p>Select video</p>
+                <input type="file" id="addMusicVideoInput" accept="video/*" hidden>
+            </div>
+            <div class="upload-area" id="addMusicAudioArea">
+                <i class="fas fa-music"></i>
+                <p>Select music/audio</p>
+                <input type="file" id="addMusicAudioInput" accept="audio/*" hidden>
+            </div>
+            <button onclick="addMusicToVideo()">Add Music</button>
+            <div id="addMusicResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: AI Script Generator -->
+        <div id="tool-script-generator" class="tool-panel">
+            <h3><i class="fas fa-pen-fancy"></i> AI Viral Script Generator</h3>
+            <input type="text" id="scriptTopic" placeholder="Topic (e.g., motivation, business, fitness)">
+            <select id="scriptPlatform">
+                <option value="tiktok">TikTok/Reels/Shorts</option>
+                <option value="youtube">YouTube</option>
+            </select>
+            <select id="scriptTone">
+                <option value="motivation">🔥 Motivational/Hype</option>
+                <option value="educational">📚 Educational</option>
+                <option value="business">💼 Business/Money</option>
+                <option value="funny">😂 Funny/Entertaining</option>
+            </select>
+            <button onclick="generateScript()">Generate Viral Script</button>
+            <div id="scriptResult" style="display:none;">
+                <div class="script-output" id="scriptText"></div>
+                <div id="scriptHooks" style="margin-top:1rem; padding:1rem; background:rgba(124,58,237,0.1); border-radius:0.5rem;"></div>
+                <button onclick="copyScriptText()">Copy Script</button>
+            </div>
+        </div>
+
+        <!-- Tool: Bulk Create -->
+        <div id="tool-bulk-create" class="tool-panel">
+            <h3><i class="fas fa-layer-group"></i> Bulk Video Creator</h3>
+            <div class="upload-area" id="bulkUploadArea">
+                <i class="fas fa-images"></i>
+                <p>Select up to 100 images</p>
+                <input type="file" id="bulkInput" accept="image/*" multiple hidden>
+            </div>
+            <input type="number" id="bulkDuration" placeholder="Duration per video" value="5">
+            <button onclick="bulkCreate()">Create All Videos</button>
+            <div id="bulkResult" class="result-area"></div>
+        </div>
+
+        <!-- Tool: Video to GIF -->
+        <div id="tool-to-gif" class="tool-panel">
+            <h3><i class="fas fa-file-image"></i> Video to GIF</h3>
+            <div class="upload-area" id="gifUploadArea">
+                <i class="fas fa-video"></i>
+                <p>Select video to convert to GIF</p>
+                <input type="file" id="gifInput" accept="video/*" hidden>
+            </div>
+            <button onclick="videoToGif()">Create GIF</button>
+            <div id="gifResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: Text to Video -->
+        <div id="tool-text-to-video" class="tool-panel">
+            <h3><i class="fas fa-font"></i> Text to Video</h3>
+            <textarea id="textToVideoContent" rows="4" placeholder="Enter your text here..."></textarea>
+            <input type="number" id="textVideoDuration" placeholder="Duration (seconds)" value="10">
+            <button onclick="textToVideo()">Create Video</button>
+            <div id="textVideoResult" class="result-area" style="display:none;"></div>
+        </div>
+
+        <!-- Tool: My Videos -->
+        <div id="tool-my-videos" class="tool-panel">
+            <h3><i class="fas fa-video"></i> Your Video Library</h3>
+            <div id="videoLibrary" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:1rem;"></div>
+        </div>
+
+        <!-- Tool: My Scripts -->
+        <div id="tool-my-scripts" class="tool-panel">
+            <h3><i class="fas fa-book"></i> Your Saved Scripts</h3>
+            <div id="scriptsLibrary"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Login Modal -->
+<div id="loginModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('loginModal')">&times;</span>
+        <h2>Sign In</h2>
+        <form onsubmit="login(event)">
+            <input type="email" id="loginEmail" placeholder="Email" required>
+            <input type="password" id="loginPassword" placeholder="Password" required>
+            <button type="submit">Sign In</button>
+        </form>
+        <p style="margin-top:1rem; text-align:center;">No account? <a href="#" onclick="switchModal('signup')">Create Free Account</a></p>
+    </div>
+</div>
+
+<!-- Signup Modal -->
+<div id="signupModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('signupModal')">&times;</span>
+        <h2>Create Account</h2>
+        <form onsubmit="signup(event)">
+            <input type="text" id="signupName" placeholder="Username" required>
+            <input type="email" id="signupEmail" placeholder="Email" required>
+            <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" required>
+            <button type="submit">Start Free</button>
+        </form>
+        <p style="margin-top:1rem; text-align:center;">Already have an account? <a href="#" onclick="switchModal('login')">Sign In</a></p>
+    </div>
+</div>
+
+<script>
+    let authToken = localStorage.getItem('token');
+    let currentUser = null;
+
+    // Check auth on load
+    if (authToken) {
+        fetch('/api/user/profile', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        })
+        .then(res => res.json())
+        .then(user => {
+            if (user && !user.error) {
+                currentUser = user;
+                document.getElementById('loginNavBtn').style.display = 'none';
+                document.getElementById('signupNavBtn').style.display = 'none';
+                document.getElementById('logoutBtn').style.display = 'inline-block';
+                document.getElementById('userNameSpan').style.display = 'inline-block';
+                document.getElementById('userNameSpan').innerHTML = `<i class="fas fa-crown"></i> ${user.username}`;
+                document.getElementById('homeSection').style.display = 'none';
+                document.getElementById('dashboardSection').style.display = 'block';
+                document.getElementById('dashUsername').innerText = user.username;
+                loadUserVideos();
+                loadUserScripts();
+            } else {
+                localStorage.removeItem('token');
+            }
+        });
+    }
+
+    function openModal(type) {
+        document.getElementById(type + 'Modal').style.display = 'flex';
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+    }
+
+    function switchModal(to) {
+        closeModal('loginModal');
+        closeModal('signupModal');
+        openModal(to);
+    }
+
+    async function signup(e) {
+        e.preventDefault();
+        const username = document.getElementById('signupName').value;
+        const email = document.getElementById('signupEmail').value;
+        const password = document.getElementById('signupPassword').value;
+
+        const res = await fetch('/api/auth/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password })
+        });
+        const data = await res.json();
+        if (data.token) {
+            localStorage.setItem('token', data.token);
+            location.reload();
+        } else {
+            alert(data.error || 'Signup failed');
+        }
+    }
+
+    async function login(e) {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (data.token) {
+            localStorage.setItem('token', data.token);
+            location.reload();
+        } else {
+            alert(data.error || 'Login failed');
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        location.reload();
+    }
+
+    // Tool switching
+    document.querySelectorAll('.tool-card').forEach(card => {
+        card.addEventListener('click', () => {
+            document.querySelectorAll('.tool-card').forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            document.querySelectorAll('.tool-panel').forEach(panel => panel.classList.remove('active'));
+            document.getElementById(`tool-${card.dataset.tool}`).classList.add('active');
+        });
+    });
+
+    // Setup upload handlers
+    function setupUpload(areaId, inputId) {
+        const area = document.getElementById(areaId);
+        const input = document.getElementById(inputId);
+        if (!area || !input) return;
+        area.onclick = () => input.click();
+        area.ondragover = (e) => e.preventDefault();
+        area.ondrop = (e) => {
+            e.preventDefault();
+            input.files = e.dataTransfer.files;
+            showNotification(`${input.files.length} file(s) selected`);
+        };
+    }
+
+    setupUpload('imageUploadArea', 'imageInput');
+    setupUpload('slideshowUploadArea', 'slideshowInput');
+    setupUpload('mergeUploadArea', 'mergeInput');
+    setupUpload('resizeUploadArea', 'resizeInput');
+    setupUpload('extractAudioUploadArea', 'extractAudioInput');
+    setupUpload('addMusicVideoArea', 'addMusicVideoInput');
+    setupUpload('addMusicAudioArea', 'addMusicAudioInput');
+    setupUpload('bulkUploadArea', 'bulkInput');
+    setupUpload('gifUploadArea', 'gifInput');
+
+    let currentImageFile = null;
+    document.getElementById('imageInput')?.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            currentImageFile = e.target.files[0];
+            showNotification('Image ready!');
+        }
+    });
+
+    async function createImageToVideo() {
+        if (!currentImageFile) return alert('Select an image first');
+        const btn = document.getElementById('generateVideoBtn');
+        btn.innerHTML = '<span class="loading"></span> Processing...';
+        btn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('image', currentImageFile);
+        formData.append('duration', document.getElementById('videoDuration').value);
+        formData.append('text', document.getElementById('videoText').value);
+
+        try {
+            const res = await fetch('/api/video/image-to-video', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}` },
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('imageVideoResult').style.display = 'block';
+                document.getElementById('imageVideoResult').innerHTML = `
+                    <video src="${data.videoUrl}" controls style="max-width:100%;"></video>
+                    <br><a href="${data.videoUrl}" download><button>Download Video</button></a>
+                `;
+                showNotification('Video created!');
+                loadUserVideos();
+            } else {
+                alert('Failed: ' + (data.error || 'Unknown error'));
+            }
+        } catch(e) {
+            alert('Error creating video');
+        } finally {
+            btn.innerHTML = 'Generate Video';
+            btn.disabled = false;
+        }
+    }
+
+    let slideshowImages = [];
+    document.getElementById('slideshowInput')?.addEventListener('change', (e) => {
+        slideshowImages = Array.from(e.target.files);
+        showNotification(`${slideshowImages.length} images ready`);
+    });
+
+    async function createSlideshow() {
+        if (slideshowImages.length === 0) return alert('Select images first');
+        const formData = new FormData();
+        slideshowImages.forEach(img => formData.append('images', img));
+        formData.append('durationPerImage', document.getElementById('slideDuration').value);
+
+        const res = await fetch('/api/video/slideshow', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('slideshowResult').style.display = 'block';
+            document.getElementById('slideshowResult').innerHTML = `<video src="${data.videoUrl}" controls></video>`;
+        }
+    }
+
+    let mergeVideos = [];
+    document.getElementById('mergeInput')?.addEventListener('change', (e) => {
+        mergeVideos = Array.from(e.target.files);
+        showNotification(`${mergeVideos.length} videos ready`);
+    });
+
+    async function mergeVideos() {
+        if (mergeVideos.length < 2) return alert('Select at least 2 videos');
+        const formData = new FormData();
+        mergeVideos.forEach(v => formData.append('videos', v));
+
+        const res = await fetch('/api/video/merge', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('mergeResult').style.display = 'block';
+            document.getElementById('mergeResult').innerHTML = `<video src="${data.videoUrl}" controls></video>`;
+        }
+    }
+
+    let resizeVideoFile = null;
+    document.getElementById('resizeInput')?.addEventListener('change', (e) => {
+        if (e.target.files[0]) resizeVideoFile = e.target.files[0];
+    });
+
+    async function resizeVideo() {
+        if (!resizeVideoFile) return alert('Select a video');
+        const formData = new FormData();
+        formData.append('video', resizeVideoFile);
+        formData.append('platform', document.getElementById('resizePlatform').value);
+
+        const res = await fetch('/api/video/resize', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('resizeResult').style.display = 'block';
+            document.getElementById('resizeResult').innerHTML = `<video src="${data.videoUrl}" controls></video>`;
+        }
+    }
+
+    let extractAudioFile = null;
+    document.getElementById('extractAudioInput')?.addEventListener('change', (e) => {
+        if (e.target.files[0]) extractAudioFile = e.target.files[0];
+    });
+
+    async function extractAudio() {
+        if (!extractAudioFile) return alert('Select a video');
+        const formData = new FormData();
+        formData.append('video', extractAudioFile);
+
+        const res = await fetch('/api/audio/extract', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('extractAudioResult').style.display = 'block';
+            document.getElementById('extractAudioResult').innerHTML = `<audio src="${data.audioUrl}" controls></audio><br><a href="${data.audioUrl}" download>Download MP3</a>`;
+        }
+    }
+
+    let addMusicVideo = null;
+    let addMusicAudio = null;
+    document.getElementById('addMusicVideoInput')?.addEventListener('change', (e) => {
+        if (e.target.files[0]) addMusicVideo = e.target.files[0];
+    });
+    document.getElementById('addMusicAudioInput')?.addEventListener('change', (e) => {
+        if (e.target.files[0]) addMusicAudio = e.target.files[0];
+    });
+
+    async function addMusicToVideo() {
+        if (!addMusicVideo || !addMusicAudio) return alert('Select video and music');
+        const formData = new FormData();
+        formData.append('video', addMusicVideo);
+        formData.append('music', addMusicAudio);
+
+        const res = await fetch('/api/video/add-music', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('addMusicResult').style.display = 'block';
+            document.getElementById('addMusicResult').innerHTML = `<video src="${data.videoUrl}" controls></video>`;
+        }
+    }
+
+    async function generateScript() {
+        const topic = document.getElementById('scriptTopic').value;
+        if (!topic) return alert('Enter a topic');
+        const btn = event.target;
+        btn.innerHTML = '<span class="loading"></span> Generating...';
+        btn.disabled = true;
+
+        const res = await fetch('/api/ai/generate-script', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                topic: topic,
+                platform: document.getElementById('scriptPlatform').value,
+                tone: document.getElementById('scriptTone').value,
+                duration: '30'
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('scriptResult').style.display = 'block';
+            document.getElementById('scriptText').innerText = data.script;
+            document.getElementById('scriptHooks').innerHTML = '<strong>🔥 Viral Hooks:</strong><br>' + data.hooks.join('<br>');
+        }
+        btn.innerHTML = 'Generate Viral Script';
+        btn.disabled = false;
+    }
+
+    function copyScriptText() {
+        const text = document.getElementById('scriptText').innerText;
+        navigator.clipboard.writeText(text);
+        showNotification('Script copied!');
+    }
+
+    let bulkImages = [];
+    document.getElementById('bulkInput')?.addEventListener('change', (e) => {
+        bulkImages = Array.from(e.target.files);
+        showNotification(`${bulkImages.length} images ready for bulk creation`);
+    });
+
+    async function bulkCreate() {
+        if (bulkImages.length === 0) return alert('Select images first');
+        const formData = new FormData();
+        bulkImages.forEach(img => formData.append('images', img));
+        formData.append('duration', document.getElementById('bulkDuration').value);
+
+        const res = await fetch('/api/video/bulk-create', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            let html = `<div style="background:#0a0a0a; padding:1rem; border-radius:0.5rem;">
+                <h4>✅ Created ${data.total} videos!</h4>`;
+            data.videos.forEach(v => {
+                html += `<a href="${v.videoUrl}" download style="display:block; color:#7c3aed; margin:5px 0;">📹 ${v.originalImage}</a>`;
+            });
+            html += `</div>`;
+            document.getElementById('bulkResult').innerHTML = html;
+            showNotification(`${data.total} videos created!`);
+            loadUserVideos();
+        }
+    }
+
+    let gifVideo = null;
+    document.getElementById('gifInput')?.addEventListener('change', (e) => {
+        if (e.target.files[0]) gifVideo = e.target.files[0];
+    });
+
+    async function videoToGif() {
+        if (!gifVideo) return alert('Select a video');
+        const formData = new FormData();
+        formData.append('video', gifVideo);
+
+        const res = await fetch('/api/video/to-gif', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('gifResult').style.display = 'block';
+            document.getElementById('gifResult').innerHTML = `<img src="${data.gifUrl}" style="max-width:100%;"><br><a href="${data.gifUrl}" download>Download GIF</a>`;
+        }
+    }
+
+    async function textToVideo() {
+        const text = document.getElementById('textToVideoContent').value;
+        if (!text) return alert('Enter text');
+        const res = await fetch('/api/video/text-to-video', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                text: text,
+                duration: document.getElementById('textVideoDuration').value
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('textVideoResult').style.display = 'block';
+            document.getElementById('textVideoResult').innerHTML = `<video src="${data.videoUrl}" controls></video>`;
+        }
+    }
+
+    async function loadUserVideos() {
+        if (!authToken) return;
+        const res = await fetch('/api/user/videos', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const videos = await res.json();
+        const container = document.getElementById('videoLibrary');
+        if (container && videos.length) {
+            container.innerHTML = videos.map(v => `
+                <div style="background:#1a1a2e; border-radius:0.5rem; padding:0.5rem;">
+                    <video src="${v.url}" style="width:100%; border-radius:0.5rem;"></video>
+                    <a href="${v.url}" download style="color:#7c3aed; display:block; text-align:center;">Download</a>
+                </div>
+            `).join('');
+        }
+    }
+
+    async function loadUserScripts() {
+        if (!authToken) return;
+        const res = await fetch('/api/user/scripts', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const scripts = await res.json();
+        const container = document.getElementById('scriptsLibrary');
+        if (container && scripts.length) {
+            container.innerHTML = scripts.map(s => `
+                <div style="background:#0a0a0a; padding:1rem; margin-bottom:1rem; border-radius:0.5rem;">
+                    <strong>📝 ${s.topic}</strong>
+                    <p style="margin-top:0.5rem;">${s.content.substring(0, 150)}...</p>
+                    <small>${new Date(s.created_at).toLocaleDateString()}</small>
+                </div>
+            `).join('');
+        }
+    }
+
+    function showNotification(msg) {
+        const n = document.createElement('div');
+        n.className = 'notification';
+        n.innerHTML = msg;
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 3000);
+    }
+</script>
+</body>
+</html>
