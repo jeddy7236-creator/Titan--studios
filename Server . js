@@ -1,849 +1,142 @@
-'use strict';
-
-// ╔══════════════════════════════════════════════════════════════════╗
-// ║           TITAN STUDIOS — Professional Backend Server           ║
-// ╚══════════════════════════════════════════════════════════════════╝
-
-const express    = require('express');
-const cors       = require('cors');
-const bcrypt     = require('bcryptjs');
-const jwt        = require('jsonwebtoken');
-const multer     = require('multer');
-const fs         = require('fs');
-const path       = require('path');
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const sqlite3    = require('sqlite3').verbose();
-const ffmpeg     = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
+const sqlite3 = require('sqlite3').verbose();
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-const PORT       = process.env.PORT       || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'titan_secret_CHANGE_IN_PRODUCTION';
-const MAX_MB     = 500;
-
-if (process.env.NODE_ENV === 'production' && JWT_SECRET.includes('CHANGE')) {
-    console.error('FATAL: Set JWT_SECRET env variable in production!');
-    process.exit(1);
+let ffmpeg, ffmpegPath;
+try {
+    ffmpeg = require('fluent-ffmpeg');
+    ffmpegPath = require('ffmpeg-static');
+    if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
+    console.log('FFmpeg loaded');
+} catch(e) {
+    console.log('FFmpeg not available');
 }
 
-// ─── FFmpeg ───────────────────────────────────────────────────────────────────
-ffmpeg.setFfmpegPath(ffmpegPath);
-
-// ─── Directory Setup ──────────────────────────────────────────────────────────
-const DIRS = [
-    'uploads', 'uploads/images', 'uploads/videos',
-    'uploads/audio', 'uploads/thumbnails',
-    'public', 'public/videos', 'public/audio', 'public/images'
-];
-DIRS.forEach(d => fs.mkdirSync(d, { recursive: true }));
-
-// ─── Express App ──────────────────────────────────────────────────────────────
 const app = express();
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'titan_secret_key';
 
-app.use(cors({ origin: '*', methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'] }));
-app.use(express.json({ limit: `${MAX_MB}mb` }));
-app.use(express.urlencoded({ extended: true, limit: `${MAX_MB}mb` }));
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
 
-// ─── Database ─────────────────────────────────────────────────────────────────
-const db = new sqlite3.Database('./titan.db', err => {
-    if (err) { console.error('DB failed:', err.message); process.exit(1); }
-    console.log('Database connected');
-});
+const dirs = ['public', 'public/uploads', 'public/videos', 'public/audio'];
+dirs.forEach(dir => { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); });
 
-db.run('PRAGMA journal_mode = WAL');
-db.run('PRAGMA foreign_keys = ON');
+const db = new sqlite3.Database('./titan.db');
 
 db.serialize(() => {
-    // Users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
-        id           TEXT PRIMARY KEY,
-        username     TEXT UNIQUE NOT NULL,
-        email        TEXT UNIQUE NOT NULL,
-        password     TEXT NOT NULL,
-        display_name TEXT,
-        avatar_url   TEXT,
-        bio          TEXT,
-        role         TEXT NOT NULL DEFAULT 'user',
-        plan         TEXT NOT NULL DEFAULT 'free',
-        is_active    INTEGER NOT NULL DEFAULT 1,
-        created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_login   DATETIME
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE,
+        email TEXT UNIQUE,
+        password TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
-
-    // Videos table
     db.run(`CREATE TABLE IF NOT EXISTS videos (
-        id          TEXT PRIMARY KEY,
-        user_id     TEXT NOT NULL,
-        title       TEXT,
-        description TEXT,
-        filename    TEXT NOT NULL,
-        url         TEXT NOT NULL,
-        thumbnail   TEXT,
-        duration    REAL,
-        file_size   INTEGER,
-        mime_type   TEXT,
-        status      TEXT NOT NULL DEFAULT 'ready',
-        views       INTEGER NOT NULL DEFAULT 0,
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        url TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
-
-    // Scripts table
     db.run(`CREATE TABLE IF NOT EXISTS scripts (
-        id          TEXT PRIMARY KEY,
-        user_id     TEXT NOT NULL,
-        title       TEXT,
-        topic       TEXT NOT NULL,
-        platform    TEXT,
-        tone        TEXT,
-        content     TEXT NOT NULL,
-        hooks       TEXT,
-        word_count  INTEGER,
-        is_favorite INTEGER NOT NULL DEFAULT 0,
-        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        topic TEXT,
+        content TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
-
-    // Audio table
-    db.run(`CREATE TABLE IF NOT EXISTS audio (
-        id         TEXT PRIMARY KEY,
-        user_id    TEXT NOT NULL,
-        title      TEXT,
-        filename   TEXT NOT NULL,
-        url        TEXT NOT NULL,
-        duration   REAL,
-        file_size  INTEGER,
-        mime_type  TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )`);
-
-    // Performance indexes
-    db.run(`CREATE INDEX IF NOT EXISTS idx_videos_user  ON videos(user_id)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_scripts_user ON scripts(user_id)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_audio_user   ON audio(user_id)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_users_email  ON users(email)`);
 });
 
-// ─── DB Promise Helpers ───────────────────────────────────────────────────────
-const dbGet = (sql, p = []) => new Promise((res, rej) =>
-    db.get(sql, p, (e, row) => e ? rej(e) : res(row)));
-
-const dbRun = (sql, p = []) => new Promise((res, rej) =>
-    db.run(sql, p, function(e) { e ? rej(e) : res({ id: this.lastID, changes: this.changes }); }));
-
-const dbAll = (sql, p = []) => new Promise((res, rej) =>
-    db.all(sql, p, (e, rows) => e ? rej(e) : res(rows)));
-
-// ─── Response Helpers ─────────────────────────────────────────────────────────
-const ok   = (res, data, status = 200) => res.status(status).json({ success: true,  ...data });
-const fail = (res, msg,  status = 400) => res.status(status).json({ success: false, error: msg });
-
-// ─── Utility Helpers ──────────────────────────────────────────────────────────
-const sanitize     = s => String(s || '').trim().slice(0, 1000);
-const validateEmail= e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-const wordCount    = s => s.trim().split(/\s+/).length;
-const jsonParse    = (s, fb = []) => { try { return JSON.parse(s); } catch { return fb; } };
-
-// ─── Auth Middleware ──────────────────────────────────────────────────────────
 const auth = (req, res, next) => {
-    const header = req.headers.authorization || '';
-    if (!header.startsWith('Bearer ')) return fail(res, 'Authorization header missing', 401);
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
     try {
-        req.user = jwt.verify(header.slice(7), JWT_SECRET);
+        req.user = jwt.verify(token, JWT_SECRET);
         next();
-    } catch (e) {
-        fail(res, e.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token', 401);
+    } catch(e) {
+        res.status(401).json({ error: 'Invalid token' });
     }
 };
 
-const adminOnly = (req, res, next) =>
-    req.user?.role === 'admin' ? next() : fail(res, 'Admin access required', 403);
-
-// ─── Multer Storage Factory ───────────────────────────────────────────────────
-const makeStorage = subfolder => multer.diskStorage({
-    destination: (req, file, cb) => cb(null, `uploads/${subfolder}/`),
-    filename:    (req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname).toLowerCase()}`)
-});
-
-const imageUpload = multer({
-    storage: makeStorage('images'),
-    limits:  { fileSize: 50 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        ['image/jpeg','image/png','image/webp','image/gif'].includes(file.mimetype)
-            ? cb(null, true)
-            : cb(new Error('Only JPEG, PNG, WebP, GIF allowed'));
-    }
-});
-
-const videoUpload = multer({
-    storage: makeStorage('videos'),
-    limits:  { fileSize: 500 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        ['video/mp4','video/quicktime','video/x-msvideo','video/webm','video/mpeg'].includes(file.mimetype)
-            ? cb(null, true)
-            : cb(new Error('Only MP4, MOV, AVI, WebM, MPEG allowed'));
-    }
-});
-
-const audioUpload = multer({
-    storage: makeStorage('audio'),
-    limits:  { fileSize: 100 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        ['audio/mpeg','audio/wav','audio/ogg','audio/mp4','audio/aac'].includes(file.mimetype)
-            ? cb(null, true)
-            : cb(new Error('Only MP3, WAV, OGG, AAC allowed'));
-    }
-});
-
-// ─── FFmpeg Helpers ───────────────────────────────────────────────────────────
-const getMediaDuration = filePath => new Promise(res =>
-    ffmpeg.ffprobe(filePath, (err, meta) =>
-        res(err ? null : (meta?.format?.duration || null))));
-
-const generateThumbnail = (videoPath, thumbName) => new Promise(res => {
-    ffmpeg(videoPath)
-        .screenshots({ timestamps: ['5%'], filename: thumbName, folder: 'uploads/thumbnails', size: '640x?' })
-        .on('end',   () => res(`/uploads/thumbnails/${thumbName}`))
-        .on('error', err => { console.warn('Thumbnail skipped:', err.message); res(null); });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//   ROUTES
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// Health check
-app.get('/health', (req, res) => res.json({
-    status: 'ok', uptime: Math.floor(process.uptime()),
-    time: new Date().toISOString(), version: '2.0.0'
-}));
-
-// ════════ AUTH ════════════════════════════════════════════════════════════════
-
-// Register
 app.post('/api/auth/signup', async (req, res) => {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+        return res.status(400).json({ error: 'All fields required' });
+    }
     try {
-        const username = sanitize(req.body.username);
-        const email    = sanitize(req.body.email).toLowerCase();
-        const password = req.body.password || '';
-        const display  = sanitize(req.body.display_name) || username;
-
-        if (!username || !email || !password)
-            return fail(res, 'Username, email and password are required');
-        if (username.length < 3 || username.length > 30)
-            return fail(res, 'Username must be 3–30 characters');
-        if (!/^[a-zA-Z0-9_]+$/.test(username))
-            return fail(res, 'Username can only contain letters, numbers and underscores');
-        if (!validateEmail(email))
-            return fail(res, 'Invalid email address');
-        if (password.length < 8)
-            return fail(res, 'Password must be at least 8 characters');
-
-        const exists = await dbGet('SELECT id FROM users WHERE email=? OR username=?', [email, username]);
-        if (exists) return fail(res, 'Email or username already taken', 409);
-
-        const hashed = await bcrypt.hash(password, 12);
-        const userId  = uuidv4();
-
-        await dbRun(
-            `INSERT INTO users (id, username, email, password, display_name) VALUES (?,?,?,?,?)`,
-            [userId, username, email, hashed, display]
-        );
-
-        const token = jwt.sign({ id: userId, username, role: 'user' }, JWT_SECRET, { expiresIn: '30d' });
-        ok(res, { token, user: { id: userId, username, email, display_name: display, role: 'user', plan: 'free' } }, 201);
-
-    } catch (e) {
-        console.error('Signup error:', e);
-        fail(res, 'Server error during signup', 500);
+        const hashed = await bcrypt.hash(password, 10);
+        const userId = uuidv4();
+        db.run('INSERT INTO users (id, username, email, password) VALUES (?,?,?,?)',
+            [userId, username, email, hashed], (err) => {
+            if (err) return res.status(400).json({ error: 'User exists' });
+            const token = jwt.sign({ id: userId, username }, JWT_SECRET, { expiresIn: '30d' });
+            res.json({ token, user: { id: userId, username, email } });
+        });
+    } catch(e) {
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Login
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const email    = sanitize(req.body.email).toLowerCase();
-        const password = req.body.password || '';
-
-        if (!email || !password) return fail(res, 'Email and password required');
-
-        const user = await dbGet('SELECT * FROM users WHERE email=?', [email]);
-
-        // Timing-safe: always run bcrypt to prevent user enumeration
-        const dummy = '$2a$12$dummyhashfortimingsafetyXXXXXXXXXXXXXXXXXXXXXXXXXXXXX00';
-        const valid  = user
-            ? await bcrypt.compare(password, user.password)
-            : await bcrypt.compare(password, dummy) && false;
-
-        if (!user || !valid || !user.is_active)
-            return fail(res, 'Invalid credentials or account disabled', 401);
-
-        await dbRun('UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=?', [user.id]);
-
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            JWT_SECRET, { expiresIn: '30d' }
-        );
-
-        ok(res, {
-            token,
-            user: {
-                id: user.id, username: user.username, email: user.email,
-                display_name: user.display_name, role: user.role, plan: user.plan,
-                avatar_url: user.avatar_url
-            }
-        });
-    } catch (e) {
-        console.error('Login error:', e);
-        fail(res, 'Server error during login', 500);
-    }
-});
-
-// ════════ USER PROFILE ════════════════════════════════════════════════════════
-
-// Get profile + stats
-app.get('/api/user/profile', auth, async (req, res) => {
-    try {
-        const user = await dbGet(
-            `SELECT id, username, email, display_name, avatar_url, bio, role, plan, created_at, last_login
-             FROM users WHERE id=?`, [req.user.id]);
-        if (!user) return fail(res, 'User not found', 404);
-
-        const [vCount, sCount, aCount] = await Promise.all([
-            dbGet('SELECT COUNT(*) AS c FROM videos  WHERE user_id=?', [req.user.id]),
-            dbGet('SELECT COUNT(*) AS c FROM scripts WHERE user_id=?', [req.user.id]),
-            dbGet('SELECT COUNT(*) AS c FROM audio   WHERE user_id=?', [req.user.id]),
-        ]);
-
-        ok(res, { user: { ...user, stats: {
-            videos : vCount?.c || 0,
-            scripts: sCount?.c || 0,
-            audio  : aCount?.c || 0,
-        }}});
-    } catch (e) { fail(res, 'Failed to fetch profile', 500); }
-});
-
-// Update profile
-app.patch('/api/user/profile', auth, async (req, res) => {
-    try {
-        const display = sanitize(req.body.display_name);
-        const bio     = sanitize(req.body.bio).slice(0, 300);
-        await dbRun(
-            `UPDATE users SET display_name=?, bio=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-            [display || null, bio || null, req.user.id]
-        );
-        ok(res, { message: 'Profile updated' });
-    } catch (e) { fail(res, 'Failed to update profile', 500); }
-});
-
-// Change password
-app.post('/api/user/change-password', auth, async (req, res) => {
-    try {
-        const { current_password, new_password } = req.body;
-        if (!current_password || !new_password)
-            return fail(res, 'Both passwords required');
-        if (new_password.length < 8)
-            return fail(res, 'New password must be at least 8 characters');
-
-        const user  = await dbGet('SELECT password FROM users WHERE id=?', [req.user.id]);
-        const valid = await bcrypt.compare(current_password, user.password);
-        if (!valid) return fail(res, 'Current password is incorrect', 401);
-
-        const hashed = await bcrypt.hash(new_password, 12);
-        await dbRun('UPDATE users SET password=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-            [hashed, req.user.id]);
-        ok(res, { message: 'Password changed successfully' });
-    } catch (e) { fail(res, 'Failed to change password', 500); }
-});
-
-// ════════ VIDEO ═══════════════════════════════════════════════════════════════
-
-// Image upload (image-to-video flow)
-app.post('/api/video/image-to-video', auth, (req, res) => {
-    imageUpload.single('image')(req, res, async err => {
-        if (err) return fail(res, err.message);
-        if (!req.file) return fail(res, 'Image file required');
-        try {
-            const videoId = uuidv4();
-            const url     = `/uploads/images/${req.file.filename}`;
-            const title   = sanitize(req.body.title) || req.file.originalname;
-
-            await dbRun(
-                `INSERT INTO videos (id, user_id, title, filename, url, mime_type, file_size)
-                 VALUES (?,?,?,?,?,?,?)`,
-                [videoId, req.user.id, title, req.file.filename, url, req.file.mimetype, req.file.size]
-            );
-
-            ok(res, { videoId, videoUrl: url, title, size: req.file.size });
-        } catch (e) {
-            fs.unlink(req.file.path, () => {});
-            fail(res, 'Failed to save record', 500);
-        }
+app.post('/api/auth/login', (req, res) => {
+    const { email, password } = req.body;
+    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
+        if (err || !user) return res.status(401).json({ error: 'Invalid credentials' });
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+        const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+        res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
     });
 });
 
-// Direct video upload with thumbnail + duration
-app.post('/api/video/upload', auth, (req, res) => {
-    videoUpload.single('video')(req, res, async err => {
-        if (err) return fail(res, err.message);
-        if (!req.file) return fail(res, 'Video file required');
-
-        const videoId   = uuidv4();
-        const filePath  = req.file.path;
-        const url       = `/uploads/videos/${req.file.filename}`;
-        const title     = sanitize(req.body.title) || req.file.originalname;
-        const thumbName = `${videoId}.jpg`;
-
-        try {
-            const [duration, thumbnail] = await Promise.all([
-                getMediaDuration(filePath),
-                generateThumbnail(filePath, thumbName)
-            ]);
-
-            await dbRun(
-                `INSERT INTO videos (id, user_id, title, filename, url, thumbnail, duration, mime_type, file_size)
-                 VALUES (?,?,?,?,?,?,?,?,?)`,
-                [videoId, req.user.id, title, req.file.filename, url,
-                 thumbnail, duration, req.file.mimetype, req.file.size]
-            );
-
-            ok(res, { videoId, videoUrl: url, thumbnail, duration, title, size: req.file.size });
-        } catch (e) {
-            fs.unlink(filePath, () => {});
-            fail(res, 'Failed to process video', 500);
-        }
+app.get('/api/user/profile', auth, (req, res) => {
+    db.get('SELECT id, username, email FROM users WHERE id = ?', [req.user.id], (err, user) => {
+        res.json(user || {});
     });
 });
 
-// List videos (paginated)
-app.get('/api/user/videos', auth, async (req, res) => {
-    try {
-        const page   = Math.max(1, parseInt(req.query.page)  || 1);
-        const limit  = Math.min(50, parseInt(req.query.limit) || 20);
-        const offset = (page - 1) * limit;
+const upload = multer({ dest: 'public/uploads/' });
 
-        const [videos, total] = await Promise.all([
-            dbAll(`SELECT * FROM videos WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-                  [req.user.id, limit, offset]),
-            dbGet(`SELECT COUNT(*) AS c FROM videos WHERE user_id=?`, [req.user.id])
-        ]);
-
-        ok(res, { videos, total: total?.c || 0, page, limit,
-                  pages: Math.ceil((total?.c || 0) / limit) });
-    } catch (e) { fail(res, 'Failed to fetch videos', 500); }
+app.post('/api/video/image-to-video', auth, upload.single('image'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Image required' });
+    const videoUrl = `/uploads/${req.file.filename}`;
+    const videoId = uuidv4();
+    db.run('INSERT INTO videos (id, user_id, url) VALUES (?,?,?)', [videoId, req.user.id, videoUrl]);
+    res.json({ success: true, videoUrl });
 });
 
-// Get single video + increment views
-app.get('/api/videos/:id', auth, async (req, res) => {
-    try {
-        const video = await dbGet('SELECT * FROM videos WHERE id=? AND user_id=?',
-            [req.params.id, req.user.id]);
-        if (!video) return fail(res, 'Video not found', 404);
-        await dbRun('UPDATE videos SET views=views+1 WHERE id=?', [req.params.id]);
-        ok(res, { video: { ...video, views: video.views + 1 } });
-    } catch (e) { fail(res, 'Failed to fetch video', 500); }
+app.post('/api/ai/generate-script', auth, (req, res) => {
+    const { topic, tone } = req.body;
+    const script = `🔥 ${topic.toUpperCase()} 🔥\n\nHere's what works:\n1. Start today\n2. Stay consistent\n3. Never give up\n\nSave this video!\n\n#${topic.replace(/ /g, '')}`;
+    const hooks = [`🎯 "${topic} hack"`, `🔥 "Get this right"`];
+    const scriptId = uuidv4();
+    db.run('INSERT INTO scripts (id, user_id, topic, content) VALUES (?,?,?,?)', [scriptId, req.user.id, topic, script]);
+    res.json({ success: true, script, hooks });
 });
 
-// Update video metadata
-app.patch('/api/videos/:id', auth, async (req, res) => {
-    try {
-        const video = await dbGet('SELECT id FROM videos WHERE id=? AND user_id=?',
-            [req.params.id, req.user.id]);
-        if (!video) return fail(res, 'Video not found', 404);
-        await dbRun('UPDATE videos SET title=?, description=? WHERE id=?',
-            [sanitize(req.body.title), sanitize(req.body.description), req.params.id]);
-        ok(res, { message: 'Video updated' });
-    } catch (e) { fail(res, 'Failed to update video', 500); }
-});
-
-// Delete video
-app.delete('/api/videos/:id', auth, async (req, res) => {
-    try {
-        const video = await dbGet('SELECT * FROM videos WHERE id=? AND user_id=?',
-            [req.params.id, req.user.id]);
-        if (!video) return fail(res, 'Video not found', 404);
-
-        await dbRun('DELETE FROM videos WHERE id=?', [req.params.id]);
-
-        [
-            path.join('uploads', 'videos',     video.filename),
-            path.join('uploads', 'images',      video.filename),
-            path.join('uploads', 'thumbnails', `${req.params.id}.jpg`),
-        ].forEach(f => fs.existsSync(f) && fs.unlink(f, () => {}));
-
-        ok(res, { message: 'Video deleted' });
-    } catch (e) { fail(res, 'Failed to delete video', 500); }
-});
-
-// ════════ AUDIO ═══════════════════════════════════════════════════════════════
-
-app.post('/api/audio/upload', auth, (req, res) => {
-    audioUpload.single('audio')(req, res, async err => {
-        if (err) return fail(res, err.message);
-        if (!req.file) return fail(res, 'Audio file required');
-        try {
-            const audioId  = uuidv4();
-            const url      = `/uploads/audio/${req.file.filename}`;
-            const title    = sanitize(req.body.title) || req.file.originalname;
-            const duration = await getMediaDuration(req.file.path);
-
-            await dbRun(
-                `INSERT INTO audio (id, user_id, title, filename, url, duration, mime_type, file_size)
-                 VALUES (?,?,?,?,?,?,?,?)`,
-                [audioId, req.user.id, title, req.file.filename, url,
-                 duration, req.file.mimetype, req.file.size]
-            );
-
-            ok(res, { audioId, audioUrl: url, duration, title });
-        } catch (e) {
-            fs.unlink(req.file.path, () => {});
-            fail(res, 'Failed to save audio', 500);
-        }
+app.get('/api/user/videos', auth, (req, res) => {
+    db.all('SELECT * FROM videos WHERE user_id = ? ORDER BY created_at DESC', [req.user.id], (err, videos) => {
+        res.json(videos || []);
     });
 });
 
-app.get('/api/user/audio', auth, async (req, res) => {
-    try {
-        const page   = Math.max(1, parseInt(req.query.page)  || 1);
-        const limit  = Math.min(50, parseInt(req.query.limit) || 20);
-        const offset = (page - 1) * limit;
-
-        const [files, total] = await Promise.all([
-            dbAll(`SELECT * FROM audio WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-                  [req.user.id, limit, offset]),
-            dbGet(`SELECT COUNT(*) AS c FROM audio WHERE user_id=?`, [req.user.id])
-        ]);
-
-        ok(res, { audio: files, total: total?.c || 0, page, limit });
-    } catch (e) { fail(res, 'Failed to fetch audio', 500); }
-});
-
-app.delete('/api/audio/:id', auth, async (req, res) => {
-    try {
-        const file = await dbGet('SELECT * FROM audio WHERE id=? AND user_id=?',
-            [req.params.id, req.user.id]);
-        if (!file) return fail(res, 'Audio not found', 404);
-        await dbRun('DELETE FROM audio WHERE id=?', [req.params.id]);
-        const fp = path.join('uploads', 'audio', file.filename);
-        if (fs.existsSync(fp)) fs.unlink(fp, () => {});
-        ok(res, { message: 'Audio deleted' });
-    } catch (e) { fail(res, 'Failed to delete audio', 500); }
-});
-
-// ════════ SCRIPT GENERATOR ════════════════════════════════════════════════════
-
-const SCRIPT_TEMPLATES = {
-    motivation: topic => `🔥 ${topic.toUpperCase()} — THE TRUTH NOBODY TELLS YOU 🔥
-
-Most people fail at ${topic} not because they lack talent.
-They fail because they quit 3 feet from gold.
-
-Here's what actually changes everything:
-
-1️⃣  Start before you feel ready — readiness is a myth
-2️⃣  Show up daily — even when it's ugly
-3️⃣  Protect your energy like it's money
-
-The gap between where you are and where you want to be?
-It's not talent. It's not luck. It's consistency.
-
-Save this video. Watch it when you want to quit.
-Drop a 🔥 if this hits different.
-
-#${topic.replace(/\s+/g,'')} #motivation #mindset #success #grind`,
-
-    business: topic => `💼 How I'd build a business around ${topic} from scratch
-
-The strategy most people overlook:
-
-Step 1 → Find the pain point inside ${topic}
-Step 2 → Create content that solves it (free value first)
-Step 3 → Build an audience of people who trust you
-Step 4 → Offer them the shortcut (your paid product)
-
-Revenue doesn't come from going viral.
-It comes from being trusted.
-
-The real math:
-1,000 true fans × $100/year = $100K business
-
-That's it. That's the whole game.
-
-Save this + share with someone building something. 🙌
-
-#business #${topic.replace(/\s+/g,'')} #entrepreneur #startup #money`,
-
-    educational: topic => `📚 What nobody explains about ${topic} (but should)
-
-❌ What most people think: it's too complicated
-✅ The reality: it's just misunderstood
-
-The #1 principle of ${topic}: understand the fundamentals first.
-Most mistakes happen when people skip the basics.
-The fastest learners embrace repetition.
-
-What to actually do:
-✔ Start with one concept at a time
-✔ Apply it immediately — don't just consume
-✔ Review and adjust every 2 weeks
-
-Knowledge without action is trivia.
-Action without knowledge is guessing.
-Combine them? That's where results live.
-
-Save this for your next session. 💡
-
-#${topic.replace(/\s+/g,'')} #learnontiktok #education #tips`,
-
-    funny: topic => `😂 POV: You decide to get into ${topic}
-
-Week 1: "This is gonna be SO easy"
-Week 2: [entire personality is now ${topic}]
-Week 3: "Why didn't anyone warn me"
-Week 4: Can't stop. Won't stop.
-Month 3: Lowkey kind of good at it now
-Month 6: Teaching others like you didn't google everything 💀
-
-Sound familiar? Comment your week below 👇
-
-#funny #relatable #${topic.replace(/\s+/g,'')} #fyp #foryou`,
-
-    storytelling: topic => `🎬 The day ${topic} changed my life
-
-I was stuck. Nothing was working.
-I didn't know what to do next.
-
-Then someone mentioned ${topic}.
-I almost ignored it.
-
-But something made me try.
-
-30 days later — everything shifted.
-
-Not because I got lucky.
-Because I finally stopped waiting for the perfect moment.
-
-If you're on the fence about ${topic}: this is your sign.
-The best time to start was a year ago.
-The second best time is right now.
-
-👇 Tell me where you're starting from
-
-#${topic.replace(/\s+/g,'')} #story #transformation #reallife`,
-};
-
-const getHooks = topic => [
-    `🎯 "Stop scrolling — this ${topic} tip changes everything"`,
-    `🔥 "99% of people get ${topic} completely wrong"`,
-    `💎 "The ${topic} secret top creators don't talk about"`,
-    `⚡ "I wish someone told me this about ${topic} sooner"`,
-    `🚨 "Do NOT try ${topic} until you watch this"`,
-];
-
-const CTAS = [
-    '💾 Save this for when you need it most.',
-    '👇 Drop your thoughts in the comments.',
-    '🔁 Share with someone who needs to see this.',
-    '➕ Follow for more content like this.',
-    '🔔 Turn on notifications — more coming soon.',
-];
-
-// Generate script
-app.post('/api/ai/generate-script', auth, async (req, res) => {
-    try {
-        const topic    = sanitize(req.body.topic);
-        const platform = sanitize(req.body.platform) || 'tiktok';
-        const tone     = sanitize(req.body.tone)     || 'motivation';
-        const title    = sanitize(req.body.title)    || `${topic} — ${tone}`;
-
-        if (!topic || topic.length < 2)
-            return fail(res, 'Topic must be at least 2 characters');
-
-        const generator = SCRIPT_TEMPLATES[tone] || SCRIPT_TEMPLATES.motivation;
-        const script    = generator(topic);
-        const hooks     = getHooks(topic);
-        const cta       = CTAS[Math.floor(Math.random() * CTAS.length)];
-        const wc        = wordCount(script);
-
-        const scriptId = uuidv4();
-        await dbRun(
-            `INSERT INTO scripts (id, user_id, title, topic, platform, tone, content, hooks, word_count)
-             VALUES (?,?,?,?,?,?,?,?,?)`,
-            [scriptId, req.user.id, title, topic, platform, tone,
-             script, JSON.stringify(hooks), wc]
-        );
-
-        ok(res, { scriptId, title, script, hooks, cta, word_count: wc, platform, tone });
-    } catch (e) {
-        console.error('Script error:', e);
-        fail(res, 'Failed to generate script', 500);
-    }
-});
-
-// List scripts (paginated + filter by tone)
-app.get('/api/user/scripts', auth, async (req, res) => {
-    try {
-        const page   = Math.max(1, parseInt(req.query.page)  || 1);
-        const limit  = Math.min(50, parseInt(req.query.limit) || 20);
-        const tone   = sanitize(req.query.tone);
-        const offset = (page - 1) * limit;
-
-        const where  = tone ? 'AND tone=?' : '';
-        const base   = [req.user.id, ...(tone ? [tone] : [])];
-
-        const [scripts, total] = await Promise.all([
-            dbAll(`SELECT * FROM scripts WHERE user_id=? ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-                  [...base, limit, offset]),
-            dbGet(`SELECT COUNT(*) AS c FROM scripts WHERE user_id=? ${where}`, base)
-        ]);
-
-        const parsed = scripts.map(s => ({ ...s, hooks: jsonParse(s.hooks) }));
-        ok(res, { scripts: parsed, total: total?.c || 0, page, limit });
-    } catch (e) { fail(res, 'Failed to fetch scripts', 500); }
-});
-
-// Get single script
-app.get('/api/scripts/:id', auth, async (req, res) => {
-    try {
-        const script = await dbGet('SELECT * FROM scripts WHERE id=? AND user_id=?',
-            [req.params.id, req.user.id]);
-        if (!script) return fail(res, 'Script not found', 404);
-        ok(res, { script: { ...script, hooks: jsonParse(script.hooks) } });
-    } catch (e) { fail(res, 'Failed to fetch script', 500); }
-});
-
-// Toggle script favorite
-app.patch('/api/scripts/:id/favorite', auth, async (req, res) => {
-    try {
-        const script = await dbGet('SELECT is_favorite FROM scripts WHERE id=? AND user_id=?',
-            [req.params.id, req.user.id]);
-        if (!script) return fail(res, 'Script not found', 404);
-        const newVal = script.is_favorite ? 0 : 1;
-        await dbRun('UPDATE scripts SET is_favorite=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-            [newVal, req.params.id]);
-        ok(res, { is_favorite: !!newVal });
-    } catch (e) { fail(res, 'Failed to toggle favorite', 500); }
-});
-
-// Delete script
-app.delete('/api/scripts/:id', auth, async (req, res) => {
-    try {
-        const script = await dbGet('SELECT id FROM scripts WHERE id=? AND user_id=?',
-            [req.params.id, req.user.id]);
-        if (!script) return fail(res, 'Script not found', 404);
-        await dbRun('DELETE FROM scripts WHERE id=?', [req.params.id]);
-        ok(res, { message: 'Script deleted' });
-    } catch (e) { fail(res, 'Failed to delete script', 500); }
-});
-
-// ════════ DASHBOARD ═══════════════════════════════════════════════════════════
-
-app.get('/api/dashboard', auth, async (req, res) => {
-    try {
-        const [vCount, sCount, aCount, totalViews, favCount] = await Promise.all([
-            dbGet(`SELECT COUNT(*)   AS c FROM videos  WHERE user_id=?`, [req.user.id]),
-            dbGet(`SELECT COUNT(*)   AS c FROM scripts WHERE user_id=?`, [req.user.id]),
-            dbGet(`SELECT COUNT(*)   AS c FROM audio   WHERE user_id=?`, [req.user.id]),
-            dbGet(`SELECT SUM(views) AS v FROM videos  WHERE user_id=?`, [req.user.id]),
-            dbGet(`SELECT COUNT(*)   AS c FROM scripts WHERE user_id=? AND is_favorite=1`, [req.user.id]),
-        ]);
-
-        const [recent_videos, recent_scripts] = await Promise.all([
-            dbAll(`SELECT id,title,url,thumbnail,views,created_at FROM videos
-                   WHERE user_id=? ORDER BY created_at DESC LIMIT 5`, [req.user.id]),
-            dbAll(`SELECT id,title,topic,tone,created_at FROM scripts
-                   WHERE user_id=? ORDER BY created_at DESC LIMIT 5`, [req.user.id]),
-        ]);
-
-        ok(res, {
-            stats: {
-                total_videos : vCount?.c    || 0,
-                total_scripts: sCount?.c    || 0,
-                total_audio  : aCount?.c    || 0,
-                total_views  : totalViews?.v|| 0,
-                fav_scripts  : favCount?.c  || 0,
-            },
-            recent_videos,
-            recent_scripts,
-        });
-    } catch (e) { fail(res, 'Failed to load dashboard', 500); }
-});
-
-// ════════ ADMIN ═══════════════════════════════════════════════════════════════
-
-// List all users
-app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
-    try {
-        const users = await dbAll(
-            `SELECT id, username, email, role, plan, is_active, created_at, last_login
-             FROM users ORDER BY created_at DESC`
-        );
-        ok(res, { users, total: users.length });
-    } catch (e) { fail(res, 'Failed to fetch users', 500); }
-});
-
-// Toggle user active status
-app.patch('/api/admin/users/:id/toggle', auth, adminOnly, async (req, res) => {
-    try {
-        const user = await dbGet('SELECT is_active FROM users WHERE id=?', [req.params.id]);
-        if (!user) return fail(res, 'User not found', 404);
-        await dbRun('UPDATE users SET is_active=? WHERE id=?',
-            [user.is_active ? 0 : 1, req.params.id]);
-        ok(res, { is_active: !user.is_active });
-    } catch (e) { fail(res, 'Failed to toggle user', 500); }
-});
-
-// Site-wide stats
-app.get('/api/admin/stats', auth, adminOnly, async (req, res) => {
-    try {
-        const [users, videos, scripts, audio] = await Promise.all([
-            dbGet('SELECT COUNT(*) AS c FROM users'),
-            dbGet('SELECT COUNT(*) AS c FROM videos'),
-            dbGet('SELECT COUNT(*) AS c FROM scripts'),
-            dbGet('SELECT COUNT(*) AS c FROM audio'),
-        ]);
-        ok(res, {
-            total_users  : users?.c   || 0,
-            total_videos : videos?.c  || 0,
-            total_scripts: scripts?.c || 0,
-            total_audio  : audio?.c   || 0,
-        });
-    } catch (e) { fail(res, 'Failed to fetch admin stats', 500); }
-});
-
-// ─── 404 Handler ──────────────────────────────────────────────────────────────
-app.use((req, res) => fail(res, `Route ${req.method} ${req.path} not found`, 404));
-
-// ─── Global Error Handler ─────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    fail(res, 'Internal server error', 500);
-});
-
-// ─── Start Server ─────────────────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
-    console.log(`\nTITAN STUDIOS running → http://localhost:${PORT}`);
-    console.log(`Environment : ${process.env.NODE_ENV || 'development'}\n`);
-});
-
-// ─── Graceful Shutdown ────────────────────────────────────────────────────────
-const shutdown = signal => {
-    console.log(`\n${signal} received — shutting down...`);
-    server.close(() => {
-        db.close(err => {
-            if (err) console.error('DB close error:', err.message);
-            else console.log('Database closed cleanly');
-            process.exit(0);
-        });
+app.get('/api/user/scripts', auth, (req, res) => {
+    db.all('SELECT * FROM scripts WHERE user_id = ? ORDER BY created_at DESC', [req.user.id], (err, scripts) => {
+        res.json(scripts || []);
     });
-    setTimeout(() => process.exit(1), 10_000);
-};
+});
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT',  () => shutdown('SIGINT'));
-process.on('uncaughtException',  err => { console.error('Uncaught:', err);   shutdown('uncaughtException'); });
-process.on('unhandledRejection', err => { console.error('Rejection:', err);  shutdown('unhandledRejection'); });
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+app.listen(PORT, () => {
+    console.log(`TITAN STUDIOS RUNNING on port ${PORT}`);
+});￼Enter
